@@ -4,6 +4,8 @@
 
 ![Version](https://img.shields.io/badge/version-1.0.0-174d38) ![React](https://img.shields.io/badge/React-19-149eca) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6) ![Tests](https://img.shields.io/badge/tests-43%20passed-2f855a) ![Demo](https://img.shields.io/badge/data-synthetic-f59e0b)
 
+**在线演示：** https://2392772541.github.io/flowerops-ai/
+
 ## 项目截图
 
 ![经营总览](docs/images/dashboard.png)
