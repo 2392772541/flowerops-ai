@@ -1,4 +1,6 @@
-import type { ActionProposal, AppState, InventoryLot, PurchaseOrder, RiskLevel } from './types'
+import type { ActionProposal, AppState, InventoryLot, ProposalType, PurchaseOrder, RiskLevel } from './types'
+import { can, type BusinessAction, type Role } from './permissions'
+import { validateActionProposal, type ProposalValidation } from './proposals'
 
 export const today = '2026-09-04'
 export const currency = (value: number) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(value)
@@ -50,38 +52,141 @@ export function proposalTypeLabel(type: ActionProposal['type']) {
 }
 
 const uid = (prefix: string) => prefix + '-' + Math.random().toString(36).slice(2, 8)
-export function approveProposal(state: AppState, proposalId: string, actor = '店长 · 林夏'): AppState {
+
+const approvalActionByProposal: Record<ProposalType, BusinessAction> = {
+  CREATE_PURCHASE_ORDER: 'APPROVE_PURCHASE',
+  CREATE_COLLECTION_DRAFT: 'SEND_COLLECTION',
+  CREATE_PRICE_CHANGE: 'CHANGE_PRICE',
+  CREATE_WASTE_PROPOSAL: 'SCRAP_STOCK'
+}
+
+function contextualValidation(state: AppState, proposal: ActionProposal): ProposalValidation {
+  const base = validateActionProposal(proposal)
+  const issues = [...base.issues]
+  if (proposal.type === 'CREATE_PURCHASE_ORDER') {
+    const payload = proposal.payload as { supplierId?: string; productId?: string }
+    const supplier = state.suppliers.find(item => item.id === payload.supplierId)
+    if (!supplier) issues.push('supplierId: 供应商不存在')
+    if (!state.products.some(item => item.id === payload.productId)) issues.push('productId: 商品不存在')
+    if (supplier && payload.productId && !supplier.products.includes(payload.productId)) issues.push('supplierId: 该供应商不供应所选商品')
+  } else if (proposal.type === 'CREATE_COLLECTION_DRAFT') {
+    const payload = proposal.payload as { customerId?: string }
+    if (!state.customers.some(item => item.id === payload.customerId)) issues.push('customerId: 客户不存在')
+  } else if (proposal.type === 'CREATE_PRICE_CHANGE') {
+    const payload = proposal.payload as { productId?: string }
+    if (!state.products.some(item => item.id === payload.productId)) issues.push('productId: 商品不存在')
+  } else if (proposal.type === 'CREATE_WASTE_PROPOSAL') {
+    const payload = proposal.payload as { lotId?: string; quantity?: number }
+    const lot = state.lots.find(item => item.id === payload.lotId)
+    if (!lot) issues.push('lotId: 花材批次不存在')
+    if (lot && payload.quantity && payload.quantity > sellableQty(lot)) issues.push('quantity: 报损数量不能超过批次可售数量')
+  }
+  return { ...base, valid: issues.length === 0, issues }
+}
+
+function validationFailed(state: AppState, proposal: ActionProposal, validation: ProposalValidation, actor: string, actorRole: Role): AppState {
+  const now = new Date().toISOString()
+  const detail = `提案校验失败：${validation.issues.join('；')}`
+  return {
+    ...state,
+    proposals: state.proposals.map(item => item.id === proposal.id ? {
+      ...item,
+      status: 'VALIDATION_FAILED',
+      validationIssues: validation.issues,
+      executionResult: detail
+    } : item),
+    auditEvents: [{
+      id: uid('AUD'), eventType: 'PROPOSAL_VALIDATION_FAILED', entityType: 'ActionProposal', entityId: proposal.id,
+      actor, actorRole, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+      before: proposal.status, after: 'VALIDATION_FAILED', result: 'FAILED', detail
+    }, ...state.auditEvents]
+  }
+}
+
+function permissionDenied(state: AppState, proposal: ActionProposal, actor: string, role: Role, action: BusinessAction, stage: 'APPROVAL' | 'REJECTION' | 'EXECUTION'): AppState {
+  const now = new Date().toISOString()
+  const detail = `权限拒绝：角色 ${role} 无权执行 ${action}，未产生业务写入`
+  return {
+    ...state,
+    auditEvents: [{
+      id: uid('AUD'), eventType: `PROPOSAL_${stage}_DENIED`, entityType: 'ActionProposal', entityId: proposal.id,
+      actor, actorRole: role, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+      before: proposal.status, after: proposal.status, result: 'REJECTED', detail
+    }, ...state.auditEvents]
+  }
+}
+
+export function approveProposal(state: AppState, proposalId: string, actor = '店长 · 林夏', role: Role = 'MANAGER'): AppState {
   const proposal = state.proposals.find(item => item.id === proposalId)
   if (!proposal || proposal.status !== 'AWAITING_APPROVAL') return state
+  const validation = contextualValidation(state, proposal)
+  if (!validation.valid) return validationFailed(state, proposal, validation, actor, role)
+  const action = approvalActionByProposal[proposal.type]
+  if (!can(role, action)) return permissionDenied(state, proposal, actor, role, action, 'APPROVAL')
   const now = new Date().toISOString()
   return {
     ...state,
-    proposals: state.proposals.map(item => item.id === proposalId ? { ...item, status: 'APPROVED', approvedBy: actor, approvedAt: now } : item),
-    auditEvents: [{ id: uid('AUD'), eventType: 'PROPOSAL_APPROVED', entityType: 'ActionProposal', entityId: proposalId, actor, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey, before: 'AWAITING_APPROVAL', after: 'APPROVED', result: 'SUCCESS', detail: '人工核对证据、预算与执行内容后批准' }, ...state.auditEvents]
+    proposals: state.proposals.map(item => item.id === proposalId ? {
+      ...item, status: 'APPROVED', approvedBy: actor, approvedAt: now, validationIssues: undefined
+    } : item),
+    auditEvents: [{
+      id: uid('AUD'), eventType: 'PROPOSAL_APPROVED', entityType: 'ActionProposal', entityId: proposalId,
+      actor, actorRole: role, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+      before: 'AWAITING_APPROVAL', after: 'APPROVED', result: 'SUCCESS',
+      detail: `角色 ${role} 人工核对证据、预算与执行内容后批准`
+    }, ...state.auditEvents]
   }
 }
-export function rejectProposal(state: AppState, proposalId: string, actor = '店长 · 林夏'): AppState {
+
+export function rejectProposal(state: AppState, proposalId: string, actor = '店长 · 林夏', role: Role = 'MANAGER'): AppState {
   const proposal = state.proposals.find(item => item.id === proposalId)
   if (!proposal || proposal.status !== 'AWAITING_APPROVAL') return state
+  const action = approvalActionByProposal[proposal.type]
+  if (!can(role, action)) return permissionDenied(state, proposal, actor, role, action, 'REJECTION')
   const now = new Date().toISOString()
   return {
     ...state,
     proposals: state.proposals.map(item => item.id === proposalId ? { ...item, status: 'REJECTED', executionResult: '人工拒绝：暂不执行' } : item),
-    auditEvents: [{ id: uid('AUD'), eventType: 'PROPOSAL_REJECTED', entityType: 'ActionProposal', entityId: proposalId, actor, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey, before: 'AWAITING_APPROVAL', after: 'REJECTED', result: 'REJECTED', detail: '人工拒绝，未产生任何正式业务写入' }, ...state.auditEvents]
+    auditEvents: [{
+      id: uid('AUD'), eventType: 'PROPOSAL_REJECTED', entityType: 'ActionProposal', entityId: proposalId,
+      actor, actorRole: role, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+      before: 'AWAITING_APPROVAL', after: 'REJECTED', result: 'REJECTED', detail: `角色 ${role} 人工拒绝，未产生任何正式业务写入`
+    }, ...state.auditEvents]
   }
 }
-export function executeProposal(state: AppState, proposalId: string, actor = '系统执行器'): AppState {
+
+function addDays(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
+}
+
+export function executeProposal(state: AppState, proposalId: string, actor = '系统执行器', role: Role = 'SYSTEM_EXECUTOR'): AppState {
   const proposal = state.proposals.find(item => item.id === proposalId)
   if (!proposal || proposal.status !== 'APPROVED') return state
-  if (state.executedKeys.includes(proposal.idempotencyKey)) return state
+  if (!can(role, 'EXECUTE_APPROVED_PROPOSAL')) return permissionDenied(state, proposal, actor, role, 'EXECUTE_APPROVED_PROPOSAL', 'EXECUTION')
+  const validation = contextualValidation(state, proposal)
+  if (!validation.valid) return validationFailed(state, proposal, validation, actor, role)
+  if (state.executedKeys.includes(proposal.idempotencyKey)) {
+    const now = new Date().toISOString()
+    return {
+      ...state,
+      auditEvents: [{
+        id: uid('AUD'), eventType: 'PROPOSAL_EXECUTION_SKIPPED', entityType: 'ActionProposal', entityId: proposal.id,
+        actor, actorRole: role, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+        before: 'APPROVED', after: 'APPROVED', result: 'SUCCESS', detail: '幂等键已执行，安全跳过重复业务写入'
+      }, ...state.auditEvents]
+    }
+  }
   const now = new Date().toISOString()
   let purchaseOrders = state.purchaseOrders
   let result = '动作已安全执行'
   if (proposal.type === 'CREATE_PURCHASE_ORDER') {
     const payload = proposal.payload as { supplierId: string; productId: string; quantity: number; unitCost: number }
+    const supplier = state.suppliers.find(item => item.id === payload.supplierId)!
     const po: PurchaseOrder = {
       id: uid('PO'), supplierId: payload.supplierId, status: 'DRAFT',
-      amount: payload.quantity * payload.unitCost, expectedAt: '2026-09-07', createdAt: now,
+      amount: payload.quantity * payload.unitCost, expectedAt: addDays(today, supplier.leadTimeDays), createdAt: now,
       sourceProposalId: proposal.id, items: [{ productId: payload.productId, quantity: payload.quantity, unitCost: payload.unitCost }]
     }
     purchaseOrders = [po, ...purchaseOrders]
@@ -96,9 +201,14 @@ export function executeProposal(state: AppState, proposalId: string, actor = '�
   return {
     ...state, purchaseOrders, executedKeys: [...state.executedKeys, proposal.idempotencyKey],
     proposals: state.proposals.map(item => item.id === proposalId ? { ...item, status: 'SUCCEEDED', executionResult: result } : item),
-    auditEvents: [{ id: uid('AUD'), eventType: 'PROPOSAL_EXECUTED', entityType: 'ActionProposal', entityId: proposalId, actor, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey, before: 'APPROVED', after: 'SUCCEEDED', result: 'SUCCESS', detail: result }, ...state.auditEvents]
+    auditEvents: [{
+      id: uid('AUD'), eventType: 'PROPOSAL_EXECUTED', entityType: 'ActionProposal', entityId: proposalId,
+      actor, actorRole: role, occurredAt: now, requestId: uid('REQ'), idempotencyKey: proposal.idempotencyKey,
+      before: 'APPROVED', after: 'SUCCEEDED', result: 'SUCCESS', detail: result
+    }, ...state.auditEvents]
   }
 }
+
 export function runSafeQuestion(state: AppState, question: string) {
   const summary = inventorySummary(state)
   const overdue = state.receivables.filter(item => item.status === 'OVERDUE').reduce((sum, item) => sum + item.amount - item.paidAmount, 0)

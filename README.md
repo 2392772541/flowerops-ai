@@ -2,7 +2,7 @@
 
 > 面向鲜切花批发、社区花店与花艺工作室的可解释 AI 经营决策工作台。
 
-![React](https://img.shields.io/badge/React-19-149eca) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6) ![Tests](https://img.shields.io/badge/tests-9%20passed-2f855a) ![Demo](https://img.shields.io/badge/data-synthetic-f59e0b)
+![React](https://img.shields.io/badge/React-19-149eca) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6) ![Tests](https://img.shields.io/badge/tests-43%20passed-2f855a) ![Demo](https://img.shields.io/badge/data-synthetic-f59e0b)
 
 ## 项目截图
 
@@ -37,7 +37,7 @@ FlowerOps 不是“接一个大模型接口的聊天机器人”，而是一个�
 ## 已实现功能
 
 - 经营总览：销售额、毛利、批次库存、应收与异常优先级
-- AI 决策中心：证据链、风险、预期影响、审批、拒绝和执行
+- AI 决策中心：证据链、风险、预期影响、Schema 校验、角色审批、拒绝和幂等执行
 - 订单中心：多来源订单、履约状态、花束配方说明
 - 批次库存：在库、预留、冻结、过期、可售、新鲜度与库存流水
 - 采购中心：AI 采购草稿、供应商交期与可靠度
@@ -45,7 +45,9 @@ FlowerOps 不是“接一个大模型接口的聊天机器人”，而是一个�
 - 经营问数：固定只读模板、数据依据和结果边界
 - 审计中心：状态前后、执行主体、Request ID 与 Idempotency Key
 - localStorage 持久化、Demo 重置和 JSON 数据导出
-- 无 API Key 可完整演示
+- 采购、订单、应收与批次库存状态机，阻止跳级和反向流转
+- AI_AGENT、店长、采购、财务、仓管与系统执行器权限矩阵
+- 43 条领域规则与治理测试，无 API Key 可完整演示
 
 ## AI 权限边界
 
@@ -99,10 +101,14 @@ npm run build
 
 ```text
 src/domain/types.ts       领域实体与状态
-src/domain/engine.ts      库存、预测、审批、执行与问数规则
+src/domain/engine.ts      库存、预测、校验、审批、执行与问数规则
+src/domain/proposals.ts   四类 AI 动作提案的 Zod Schema
+src/domain/permissions.ts 角色权限矩阵与最小权限规则
+src/domain/workflow.ts    订单、采购、应收和批次状态机
 src/data/demoData.ts      明确标注的合成演示数据
 src/storage/repository.ts localStorage 与 JSON 导出
-src/tests/engine.test.ts  关键业务不变量测试
+src/tests/engine.test.ts  库存、预测与幂等执行测试
+src/tests/governance.test.ts 权限、提案校验和状态机测试
 src/App.tsx               八个业务页面与交互闭环
 docs/                     PRD、架构、AI 边界与评测方案
 ```

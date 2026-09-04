@@ -55,9 +55,9 @@ export const demoState: AppState = {
     { id: 'AP-003', type: 'CREATE_COLLECTION_DRAFT', title: '为拾光婚礼策划生成温和催款草稿', reason: '该客户有 ¥8,600 已逾期 2 天，历史付款稳定且信用等级为 A，适合先采用温和提醒。', evidence: [{ label: '逾期余额', value: '¥8,600', detail: '应收 ¥12,600，已支付 ¥4,000' }, { label: '逾期天数', value: '2 天', detail: '到期日 2026-09-02' }, { label: '客户等级', value: 'A', detail: '历史合作稳定' }], payload: { customerId: 'C-001', tone: '友好提醒' }, expectedImpact: '缩短回款周期；消息仅生成草稿，不会自动发送。', risk: 'LOW', status: 'AWAITING_APPROVAL', idempotencyKey: 'collection-c001-20260904-v1', generatedAt: '2026-09-04T09:40:00+08:00' }
   ],
   auditEvents: [
-    { id: 'AUD-003', eventType: 'INVENTORY_RESERVED', entityType: 'SalesOrder', entityId: 'SO-26090401', actor: '订单服务', occurredAt: '2026-09-04T09:10:00+08:00', requestId: 'REQ-0401', idempotencyKey: 'reserve-so-26090401', before: 'CONFIRMED', after: 'STOCK_RESERVED', result: 'SUCCESS', detail: '按照花束配方展开并预留对应花材' },
-    { id: 'AUD-002', eventType: 'QUALITY_HOLD_CREATED', entityType: 'InventoryLot', entityId: 'LOT-R01', actor: '仓管 · 周岚', occurredAt: '2026-09-04T08:40:00+08:00', requestId: 'REQ-0398', before: 'AVAILABLE', after: 'QUALITY_HOLD', result: 'SUCCESS', detail: '12枝花头受损，进入质量冻结，未计入可售库存' },
-    { id: 'AUD-001', eventType: 'AI_PROPOSALS_GENERATED', entityType: 'DecisionRun', entityId: 'RUN-0904', actor: '规则AI', occurredAt: '2026-09-04T08:00:00+08:00', requestId: 'REQ-0390', result: 'SUCCESS', detail: '使用固定、可解释规则扫描库存、订单和应收异常' }
+    { id: 'AUD-003', eventType: 'INVENTORY_RESERVED', entityType: 'SalesOrder', entityId: 'SO-26090401', actor: '订单服务', actorRole: 'SYSTEM_EXECUTOR', occurredAt: '2026-09-04T09:10:00+08:00', requestId: 'REQ-0401', idempotencyKey: 'reserve-so-26090401', before: 'CONFIRMED', after: 'STOCK_RESERVED', result: 'SUCCESS', detail: '按照花束配方展开并预留对应花材' },
+    { id: 'AUD-002', eventType: 'QUALITY_HOLD_CREATED', entityType: 'InventoryLot', entityId: 'LOT-R01', actor: '仓管 · 周岚', actorRole: 'WAREHOUSE', occurredAt: '2026-09-04T08:40:00+08:00', requestId: 'REQ-0398', before: 'AVAILABLE', after: 'QUALITY_HOLD', result: 'SUCCESS', detail: '12枝花头受损，进入质量冻结，未计入可售库存' },
+    { id: 'AUD-001', eventType: 'AI_PROPOSALS_GENERATED', entityType: 'DecisionRun', entityId: 'RUN-0904', actor: '规则AI', actorRole: 'AI_AGENT', occurredAt: '2026-09-04T08:00:00+08:00', requestId: 'REQ-0390', result: 'SUCCESS', detail: '使用固定、可解释规则扫描库存、订单和应收异常' }
   ],
   executedKeys: []
 }

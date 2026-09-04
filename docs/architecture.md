@@ -12,8 +12,10 @@ Application Service
 Domain Engine
  ├─ Batch inventory & recipe expansion
  ├─ Forecast & replenishment rules
- ├─ Permission and proposal state machine
- └─ Idempotency & audit events
+ ├─ Zod proposal Schema + contextual entity validation
+ ├─ RBAC role permission matrix
+ ├─ Sales / purchase / receivable / lot state machines
+ └─ Idempotency, audit events & safe draft execution
  ↓
 Local demo repository（localStorage + JSON export）
 ```
@@ -35,3 +37,19 @@ AI 生成 ActionProposal，包含原因、证据、负载、预期影响、风�
 ### 外部副作用
 
 采购发送、消息发送等外部动作无法像数据库事务一样“回滚”。生产实现必须采用幂等键、重试、Outbox 和业务补偿；当前 Demo 仅创建内部草稿，不模拟已经对外发送。
+
+
+## 提案治理链路
+
+```text
+AI_AGENT 生成 ActionProposal
+  ↓ Schema 校验
+  ↓ 供应商 / 商品 / 客户 / 批次实体校验
+  ↓ OWNER / MANAGER / FINANCE 等授权角色人工审批
+  ↓ SYSTEM_EXECUTOR 执行前二次校验
+  ↓ 幂等键去重
+  ↓ 仅创建内部草稿或复核单
+  ↓ AuditEvent 记录主体、前后状态、请求 ID 与结果
+```
+
+执行器与 AI_AGENT 使用不同角色，避免“提出建议的人”同时拥有审批和执行权限。

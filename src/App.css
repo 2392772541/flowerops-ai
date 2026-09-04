@@ -16,3 +16,5 @@
 @media(max-width:420px){.stats-grid{grid-template-columns:minmax(0,1fr)}}
 
 @media(max-width:600px){.stats-grid{grid-template-columns:minmax(0,1fr)}.stat-card{width:100%}.priority-item p{-webkit-line-clamp:2}}
+
+.role-strip{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin-top:14px;border:1px solid #dce8e0;border-radius:11px;background:#f6faf7;color:#42604f}.role-strip svg{flex:none;color:#3f7f5d}.role-strip b{font-size:10px}.role-strip p{font-size:8px;line-height:1.6;margin:3px 0 0;color:#718077}.result-banner.danger{background:#fff1f0;color:#99443f;border-color:#f1d2cf}.result-banner ul{margin:7px 0 0;padding-left:16px;font-size:8px;line-height:1.6}.result-banner li+li{margin-top:2px}

@@ -1,3 +1,6 @@
+import type { Role } from './permissions'
+import type { LotStatus, PurchaseOrderStatus, ReceivableStatus, SalesOrderStatus } from './workflow'
+
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
 export type ProposalStatus =
   | 'GENERATED' | 'VALIDATING' | 'AWAITING_APPROVAL' | 'APPROVED'
@@ -17,7 +20,7 @@ export interface InventoryLot {
   id: string; productId: string; batchNo: string; qtyOnHand: number
   qtyReserved: number; qtyQualityHold: number; qtyExpired: number
   receivedAt: string; sellBy: string; unitCost: number; supplierId: string
-  qualityGrade: 'A' | 'B' | 'C'; status: 'AVAILABLE' | 'NEAR_EXPIRY' | 'QUALITY_HOLD' | 'EXPIRED' | 'DEPLETED'
+  qualityGrade: 'A' | 'B' | 'C'; status: LotStatus
 }
 export interface InventoryMovement {
   id: string; lotId: string; productId: string
@@ -29,7 +32,7 @@ export interface Supplier {
   paymentTerms: string; products: string[]
 }
 export interface PurchaseOrder {
-  id: string; supplierId: string; status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'SENT' | 'PARTIALLY_RECEIVED' | 'RECEIVED'
+  id: string; supplierId: string; status: PurchaseOrderStatus
   amount: number; expectedAt: string; createdAt: string; sourceProposalId?: string
   items: Array<{ productId: string; quantity: number; unitCost: number }>
 }
@@ -39,13 +42,13 @@ export interface Customer {
 }
 export interface SalesOrder {
   id: string; customerId: string; source: '微信' | '门店' | '企业合同' | '小程序'
-  status: 'DRAFT' | 'CONFIRMED' | 'STOCK_RESERVED' | 'PREPARING' | 'READY' | 'DELIVERING' | 'COMPLETED' | 'CANCELLED'
+  status: SalesOrderStatus
   deliveryAt: string; totalAmount: number
   items: Array<{ productId: string; quantity: number; unitPrice: number }>
 }
 export interface Receivable {
   id: string; customerId: string; orderId: string; amount: number; paidAmount: number
-  dueDate: string; status: 'OPEN' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'DISPUTED'
+  dueDate: string; status: ReceivableStatus
 }
 export interface ActionProposal {
   id: string; type: ProposalType; title: string; reason: string
@@ -53,10 +56,11 @@ export interface ActionProposal {
   payload: Record<string, unknown>; expectedImpact: string; risk: RiskLevel
   status: ProposalStatus; idempotencyKey: string; generatedAt: string
   approvedBy?: string; approvedAt?: string; executionResult?: string
+  validationIssues?: string[]
 }
 export interface AuditEvent {
   id: string; eventType: string; entityType: string; entityId: string
-  actor: string; occurredAt: string; requestId: string; idempotencyKey?: string
+  actor: string; actorRole?: Role; occurredAt: string; requestId: string; idempotencyKey?: string
   before?: string; after?: string; result: 'SUCCESS' | 'REJECTED' | 'FAILED'; detail: string
 }
 export interface AppState {
