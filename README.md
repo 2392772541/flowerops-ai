@@ -2,7 +2,7 @@
 
 > 面向鲜切花批发、社区花店与花艺工作室的可解释 AI 经营决策工作台。
 
-![React](https://img.shields.io/badge/React-19-149eca) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6) ![Tests](https://img.shields.io/badge/tests-43%20passed-2f855a) ![Demo](https://img.shields.io/badge/data-synthetic-f59e0b)
+![Version](https://img.shields.io/badge/version-1.0.0-174d38) ![React](https://img.shields.io/badge/React-19-149eca) ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6) ![Tests](https://img.shields.io/badge/tests-43%20passed-2f855a) ![Demo](https://img.shields.io/badge/data-synthetic-f59e0b)
 
 ## 项目截图
 
@@ -41,6 +41,8 @@ FlowerOps 不是“接一个大模型接口的聊天机器人”，而是一个�
 - [AI 权限与安全边界](docs/AI-boundary.md)
 - [43 条测试与评测方案](docs/evaluation.md)
 - [AI 产品经理面试讲解脚本](docs/interview-story.md)
+- [版本变更记录](CHANGELOG.md)
+
 ## 已实现功能
 
 - 经营总览：销售额、毛利、批次库存、应收与异常优先级
@@ -89,9 +91,7 @@ npm run dev
 质量门槛：
 
 ```bash
-npm run lint
-npm test
-npm run build
+npm run check
 ```
 
 ## 部署

@@ -1,7 +1,7 @@
 {
-  "name": "florapilot-ai",
+  "name": "flowerops-ai",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "lucide-react": "^1.40.0",
@@ -30,5 +31,19 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "description": "面向鲜切花批发、社区花店与花艺工作室的可解释 AI 经营决策工作台",
+  "keywords": [
+    "ai-product-manager",
+    "decision-support",
+    "human-in-the-loop",
+    "inventory",
+    "workflow",
+    "react",
+    "typescript"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
   }
 }
