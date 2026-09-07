@@ -33,6 +33,50 @@ export function inventorySummary(state: AppState) {
   const value = state.lots.reduce((sum, lot) => sum + sellableQty(lot) * lot.unitCost, 0)
   return { onHand, reserved, qualityHold, expired, sellable, effective, value }
 }
+
+export function scenarioOrderValue(state: AppState, date = today) {
+  return state.orders.filter(order => order.deliveryAt.slice(0, 10) === date).reduce((sum, order) => sum + order.totalAmount, 0)
+}
+export function scenarioGrossProfit(state: AppState, date = today) {
+  return state.orders.filter(order => order.deliveryAt.slice(0, 10) === date).reduce((sum, order) => {
+    return sum + order.items.reduce((itemSum, item) => {
+      const product = state.products.find(productItem => productItem.id === item.productId)
+      return itemSum + (item.unitPrice - (product?.defaultCost ?? item.unitPrice)) * item.quantity
+    }, 0)
+  }, 0)
+}
+export function proposalSimulation(state: AppState, proposal: ActionProposal) {
+  if (proposal.type === 'CREATE_PURCHASE_ORDER') {
+    const payload = proposal.payload as { quantity?: number; unitCost?: number }
+    const purchaseCost = (payload.quantity ?? 0) * (payload.unitCost ?? 0)
+    return {
+      label: '采购资金占用情景',
+      value: currency(purchaseCost),
+      formula: `${payload.quantity ?? 0} 枝 × ${currency(payload.unitCost ?? 0)}/枝`,
+      boundary: '仅计算采购草稿金额；未估算真实缺货率或销售提升。'
+    }
+  }
+  if (proposal.type === 'CREATE_WASTE_PROPOSAL') {
+    const payload = proposal.payload as { lotId?: string; suggestedDiscount?: number }
+    const lot = state.lots.find(item => item.id === payload.lotId)
+    const product = lot && state.products.find(item => item.id === lot.productId)
+    const qty = lot ? sellableQty(lot) : 0
+    const discount = payload.suggestedDiscount ?? 0
+    const simulatedRevenue = qty * (product?.salePrice ?? 0) * (1 - discount)
+    return {
+      label: '全部售出情景收入',
+      value: currency(simulatedRevenue),
+      formula: `${qty} 枝 × ${currency(product?.salePrice ?? 0)}/枝 × (1 - ${percent(discount)})`,
+      boundary: '上限情景，不代表售罄概率、实际销售额或损耗改善。'
+    }
+  }
+  if (proposal.type === 'CREATE_COLLECTION_DRAFT') {
+    const payload = proposal.payload as { customerId?: string }
+    const overdue = state.receivables.filter(item => item.customerId === payload.customerId && item.status === 'OVERDUE').reduce((sum, item) => sum + item.amount - item.paidAmount, 0)
+    return { label: '当前可追溯逾期余额', value: currency(overdue), formula: '应收金额 - 已支付金额', boundary: '生成沟通草稿，不预测回款日期或成功率。' }
+  }
+  return { label: '情景模拟', value: '需人工复核', formula: '由提案载荷与经营约束共同决定', boundary: '不宣称真实业务收益。' }
+}
 export function expandRecipe(state: AppState, productId: string, quantity: number) {
   const recipe = state.recipes.find(item => item.outputProductId === productId)
   return recipe ? recipe.items.map(item => ({ productId: item.productId, quantity: item.quantity * quantity })) : [{ productId, quantity }]
@@ -161,14 +205,14 @@ function addDays(date: string, days: number) {
   return value.toISOString().slice(0, 10)
 }
 
-export function executeProposal(state: AppState, proposalId: string, actor = '系统执行器', role: Role = 'SYSTEM_EXECUTOR'): AppState {
+export function executeProposal(state: AppState, proposalId: string, actor = '系统执行器', role: Role = 'SYSTEM_EXECUTOR', executedAt = new Date().toISOString()): AppState {
   const proposal = state.proposals.find(item => item.id === proposalId)
   if (!proposal || proposal.status !== 'APPROVED') return state
   if (!can(role, 'EXECUTE_APPROVED_PROPOSAL')) return permissionDenied(state, proposal, actor, role, 'EXECUTE_APPROVED_PROPOSAL', 'EXECUTION')
   const validation = contextualValidation(state, proposal)
   if (!validation.valid) return validationFailed(state, proposal, validation, actor, role)
+  const now = executedAt
   if (state.executedKeys.includes(proposal.idempotencyKey)) {
-    const now = new Date().toISOString()
     return {
       ...state,
       auditEvents: [{
@@ -178,7 +222,6 @@ export function executeProposal(state: AppState, proposalId: string, actor = '�
       }, ...state.auditEvents]
     }
   }
-  const now = new Date().toISOString()
   let purchaseOrders = state.purchaseOrders
   let result = '动作已安全执行'
   if (proposal.type === 'CREATE_PURCHASE_ORDER') {
@@ -186,7 +229,7 @@ export function executeProposal(state: AppState, proposalId: string, actor = '�
     const supplier = state.suppliers.find(item => item.id === payload.supplierId)!
     const po: PurchaseOrder = {
       id: uid('PO'), supplierId: payload.supplierId, status: 'DRAFT',
-      amount: payload.quantity * payload.unitCost, expectedAt: addDays(today, supplier.leadTimeDays), createdAt: now,
+      amount: payload.quantity * payload.unitCost, expectedAt: addDays(now.slice(0, 10), supplier.leadTimeDays), createdAt: now,
       sourceProposalId: proposal.id, items: [{ productId: payload.productId, quantity: payload.quantity, unitCost: payload.unitCost }]
     }
     purchaseOrders = [po, ...purchaseOrders]

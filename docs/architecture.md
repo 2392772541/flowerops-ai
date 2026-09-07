@@ -1,55 +1,83 @@
-# 系统架构
+# 系统架构与模型处理链路（v2.0）
+
+## 1. 总体架构
 
 ```text
-React UI
- ├─ Dashboard / Orders / Lots / Purchasing / Receivables
- ├─ Decision Center / Safe Q&A / Audit
- ↓
-Application Service
- ├─ Query path（只读聚合与解释）
- └─ Command path（提案 → 审批 → 执行）
- ↓
-Domain Engine
- ├─ Batch inventory & recipe expansion
- ├─ Forecast & replenishment rules
- ├─ Zod proposal Schema + contextual entity validation
- ├─ RBAC role permission matrix
- ├─ Sales / purchase / receivable / lot state machines
- └─ Idempotency, audit events & safe draft execution
- ↓
-Local demo repository（localStorage + JSON export）
+React 面试原型
+ ├─ 面试导览 / 经营总览 / 受控决策
+ ├─ 模型实验室 / 离线评测
+ └─ 订单 / 批次 / 采购 / 应收 / 审计
+              ↓
+应用服务（查询与命令分离）
+ ├─ Query：只读聚合、公式、证据
+ └─ Command：提案 → 审批 → 执行
+              ↓
+确定性领域引擎
+ ├─ 批次库存、配方展开、金额与补货规则
+ ├─ Schema、实体、经营策略与权限校验
+ ├─ 订单/采购/应收/批次状态机
+ └─ 幂等、安全草稿、审计事件
+              ↓
+Demo Repository（localStorage + JSON 导出）
 ```
 
-## 关键架构决定
-
-### 查询与命令分离
-
-经营问数只能调用固定的只读查询模板。AI 无法把自然语言直接转换成任意数据库写操作。
-
-### 库存采用流水思路
-
-库存变动通过 InventoryMovement 表达。生产系统中余额应由流水或经过校验的快照重算，避免直接覆盖导致账实不符。
-
-### 业务动作提案
-
-AI 生成 ActionProposal，包含原因、证据、负载、预期影响、风险和幂等键。只有状态为 APPROVED 的提案才能进入执行器。
-
-### 外部副作用
-
-采购发送、消息发送等外部动作无法像数据库事务一样“回滚”。生产实现必须采用幂等键、重试、Outbox 和业务补偿；当前 Demo 仅创建内部草稿，不模拟已经对外发送。
-
-
-## 提案治理链路
+## 2. 模型处理链路
 
 ```text
-AI_AGENT 生成 ActionProposal
-  ↓ Schema 校验
-  ↓ 供应商 / 商品 / 客户 / 批次实体校验
-  ↓ OWNER / MANAGER / FINANCE 等授权角色人工审批
-  ↓ SYSTEM_EXECUTOR 执行前二次校验
-  ↓ 幂等键去重
-  ↓ 仅创建内部草稿或复核单
-  ↓ AuditEvent 记录主体、前后状态、请求 ID 与结果
+业务事实快照
+→ Prompt v1.3（只提供必要事实与允许动作）
+→ ModelReplayProvider / 未来服务端模型 Provider
+→ JSON 解析
+→ Zod DecisionCandidate Schema
+→ Evidence IDs 完整性检查
+→ 业务实体白名单检查
+→ 数量/折扣/动作经营策略检查
+→ 通过：进入 AWAITING_APPROVAL
+→ 失败：阻断或 RuleProvider 降级
 ```
 
-执行器与 AI_AGENT 使用不同角色，避免“提出建议的人”同时拥有审批和执行权限。
+在线 GitHub Pages 不调用真实模型，不存 API Key；`ModelReplayProvider` 用固定输出展示成功和失败。未来真实模型只能通过服务端代理接入同一 `AIProvider` 契约。
+
+## 3. 为什么查询与命令分离
+
+经营问数使用固定只读查询和确定性聚合。自然语言不能直接转换成任意数据库写操作。模型生成的动作只是 `ActionProposal`，必须走命令链路。
+
+## 4. 为什么库存使用批次与流水
+
+鲜切花的可售能力取决于批次效期、质量冻结、预留和过期量。生产系统应从流水或校验快照重算余额，禁止模型直接覆盖库存数字。
+
+## 5. 提案治理链路
+
+```text
+AI_AGENT 生成候选
+  ↓ Schema / 证据 / 实体 / 策略校验
+OWNER / MANAGER / FINANCE 等授权角色人工审批
+  ↓
+SYSTEM_EXECUTOR 执行前二次校验
+  ↓
+Idempotency Key 去重
+  ↓
+仅创建内部草稿或复核单
+  ↓
+AuditEvent 记录主体、状态、请求 ID、键和结果
+```
+
+提出、批准和执行由不同角色承担，避免模型自批、自执或人工角色冒充执行器。
+
+## 6. 故障与降级
+
+| 故障 | 系统行为 | 副作用 |
+|---|---|---|
+| 模型超时 | 切换确定性规则摘要与草稿建议 | 仍需人工审批 |
+| JSON/Schema 错误 | 阻断，不进入审批队列 | 无写入 |
+| 未知实体/证据 | 实体校验阻断 | 无写入 |
+| 参数突破红线 | 经营策略阻断，要求人工重拟 | 无写入 |
+| 重复执行 | 幂等键命中并跳过 | 不重复建单 |
+
+## 7. 生产化演进
+
+- 服务端模型代理与密钥管理。
+- 持久化数据库、RBAC、Outbox、重试和补偿。
+- Prompt/模型/数据集版本管理与可观测性。
+- 影子模式、灰度、人工反馈和回归门禁。
+- 真实 ERP/微信/供应商集成前进行权限、隐私与安全评审。

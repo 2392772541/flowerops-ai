@@ -1,7 +1,7 @@
 {
   "name": "flowerops-ai",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -32,7 +32,7 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
-  "description": "面向鲜切花批发、社区花店与花艺工作室的可解释 AI 经营决策工作台",
+  "description": "面向小型鲜切花批零一体商家的受控 AI 经营决策实验",
   "keywords": [
     "ai-product-manager",
     "decision-support",

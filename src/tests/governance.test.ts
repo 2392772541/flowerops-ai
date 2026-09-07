@@ -196,9 +196,11 @@ describe('提案审批与安全执行', () => {
 
   it('合法执行创建草稿并按供应商交期计算预计到货日', () => {
     const approved = approveProposal(withProposal(proposal()), 'AP-TEST')
-    const result = executeProposal(approved, 'AP-TEST')
+    const result = executeProposal(approved, 'AP-TEST', '系统执行器', 'SYSTEM_EXECUTOR', '2026-09-04T09:30:00+08:00')
     expect(result.purchaseOrders[0].status).toBe('DRAFT')
+    expect(result.purchaseOrders[0].createdAt).toBe('2026-09-04T09:30:00+08:00')
     expect(result.purchaseOrders[0].expectedAt).toBe('2026-09-06')
+    expect(result.purchaseOrders[0].expectedAt >= result.purchaseOrders[0].createdAt.slice(0, 10)).toBe(true)
     expect(result.proposals[0].status).toBe('SUCCEEDED')
     expect(result.auditEvents[0].actorRole).toBe('SYSTEM_EXECUTOR')
   })

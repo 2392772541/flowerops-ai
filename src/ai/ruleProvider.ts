@@ -4,7 +4,7 @@ import { runSafeQuestion } from '../domain/engine'
 
 export class RuleAIProvider implements AIProvider {
   readonly id = 'rule-demo'
-  readonly label = '可解释规则 AI'
+  readonly label = '确定性规则基线'
   readonly requiresApiKey = false
 
   preview(state: AppState, question: string): AIAnswer {
