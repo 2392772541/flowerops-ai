@@ -1,10 +1,12 @@
+import { HashRouter, Routes, Route, useLocation, useNavigate, Link } from 'react-router-dom'
+import { PurchaseWorkspace, OrderWorkspace } from './Operations'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertTriangle, Archive, ArrowRight, Bot, Box, Check, ChevronRight,
   CircleDollarSign, Clock3, Download, FileCheck2, Flower2,
   Gauge, LayoutDashboard, Menu, PackageCheck, PanelLeftClose, RefreshCcw,
-  Search, Send, ShieldCheck, ShoppingCart, Sparkles, Store, Truck, Users, X,
-  BookOpen, FlaskConical, Play, Database, GitBranch, Target, ClipboardCheck, ShieldAlert
+  Search, Send, ShieldCheck, ShoppingCart, Sparkles, Truck, Users, X,
+  FlaskConical, Play, Database, GitBranch, Target, ClipboardCheck, ShieldAlert
 } from 'lucide-react'
 import './App.css'
 import { approveProposal, currency, daysUntil, executeProposal, freshnessFactor, inventorySummary, percent, proposalSimulation, rejectProposal, riskLabel, scenarioGrossProfit, scenarioOrderValue, sellableQty, wasteRisk } from './domain/engine'
@@ -16,8 +18,8 @@ import { evaluationCases, evaluationReport, type EvalProvider } from './data/eva
 
 type PageKey = 'case' | 'dashboard' | 'decisions' | 'lab' | 'evaluation' | 'orders' | 'inventory' | 'purchasing' | 'customers' | 'ask' | 'audit'
 const navItems: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard }> = [
-  { key: 'case', label: '面试导览', icon: BookOpen },
-  { key: 'dashboard', label: '经营情景', icon: LayoutDashboard },
+
+  { key: 'dashboard', label: '工作台', icon: LayoutDashboard },
   { key: 'decisions', label: '受控决策', icon: Sparkles },
   { key: 'lab', label: '模型实验室', icon: FlaskConical },
   { key: 'evaluation', label: '离线评测', icon: ClipboardCheck },
@@ -33,7 +35,6 @@ const statusLabels: Record<ProposalStatus, string> = {
 }
 const statusClass = (status: string) => /SUCCEEDED|COMPLETED|RECEIVED|PAID|SUCCESS/.test(status) ? 'success' : /AWAITING|PENDING|SENT|RESERVED|PREPARING|OPEN|PARTIALLY/.test(status) ? 'warning' : /OVERDUE|FAILED|REJECTED|EXPIRED|CANCELLED/.test(status) ? 'danger' : 'neutral'
 const productName = (state: AppState, id: string) => state.products.find(item => item.id === id)?.name ?? id
-const supplierName = (state: AppState, id: string) => state.suppliers.find(item => item.id === id)?.name ?? id
 const customerName = (state: AppState, id: string) => state.customers.find(item => item.id === id)?.name ?? id
 
 function Badge({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: string }) { return <span className={'badge ' + tone}>{children}</span> }
@@ -101,15 +102,11 @@ function Decisions({ state, setState }: { state: AppState; setState: (s: AppStat
   </div>
 }
 
-function Orders({ state }: { state: AppState }) { return <section className="panel"><SectionTitle eyebrow="ORDER ORCHESTRATION" title="订单中心" action={<Badge tone="mint">花束配方自动展开</Badge>} /><div className="table-wrap"><table><thead><tr><th>订单 / 客户</th><th>来源</th><th>履约时间</th><th>商品</th><th>金额</th><th>状态</th></tr></thead><tbody>{state.orders.map(order=><tr key={order.id}><td><b>{order.id}</b><small>{customerName(state,order.customerId)}</small></td><td>{order.source}</td><td>{new Date(order.deliveryAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td>{order.items.map(x=><span key={x.productId}>{productName(state,x.productId)} × {x.quantity}</span>)}</td><td><b>{currency(order.totalAmount)}</b></td><td><Badge tone={statusClass(order.status)}>{({STOCK_RESERVED:'已预留',PREPARING:'制作中',COMPLETED:'已完成',DRAFT:'草稿',CONFIRMED:'已确认',READY:'待配送',DELIVERING:'配送中',CANCELLED:'已取消'} as Record<string,string>)[order.status]}</Badge></td></tr>)}</tbody></table></div><div className="callout"><Flower2/><div><b>为什么花束订单需要配方展开？</b><p>一个“心动红玫瑰花束”会消耗 19 枝玫瑰、5 枝洋桔梗和 6 枝尤加利。系统按配方预留原料，避免只看成品订单导致花材缺货。</p></div></div></section> }
-
 function Inventory({ state }: { state: AppState }) {
   const summary = inventorySummary(state)
   return <><div className="mini-stats"><div><span>在库总量</span><b>{summary.onHand} 枝</b></div><div><span>已预留</span><b>{summary.reserved} 枝</b></div><div><span>质量冻结</span><b>{summary.qualityHold} 枝</b></div><div><span>实际可售</span><b>{summary.sellable} 枝</b></div><div><span>库存成本</span><b>{currency(summary.value)}</b></div></div><section className="panel"><SectionTitle eyebrow="LOT-LEVEL INVENTORY" title="批次库存" action={<Badge tone="neutral">不可变库存流水</Badge>} /><div className="table-wrap"><table><thead><tr><th>花材 / 批次</th><th>到货 / 可售期限</th><th>在库</th><th>预留</th><th>冻结</th><th>可售</th><th>新鲜度</th><th>风险成本</th></tr></thead><tbody>{state.lots.map(lot=><InventoryRow key={lot.id} state={state} lot={lot}/>)}</tbody></table></div></section><section className="panel"><SectionTitle eyebrow="IMMUTABLE LEDGER" title="最近库存流水"/><div className="timeline">{state.movements.map(m=><div key={m.id}><i/><div><b>{m.type} · {productName(state,m.productId)}</b><p>{m.note}</p><small>{m.referenceId} · {new Date(m.occurredAt).toLocaleString('zh-CN')} · {m.operator}</small></div><strong className={m.quantity<0?'negative':'positive'}>{m.quantity>0?'+':''}{m.quantity}</strong></div>)}</div></section></>
 }
 function InventoryRow({state,lot}:{state:AppState;lot:InventoryLot}) { const fresh=freshnessFactor(lot.sellBy); const risk=wasteRisk(lot, daysUntil(lot.sellBy)<=1?.55:.25); return <tr><td><b>{productName(state,lot.productId)}</b><small>{lot.batchNo} · {lot.qualityGrade}级</small></td><td><span>{lot.receivedAt}</span><small className={daysUntil(lot.sellBy)<=1?'red-text':''}>可售至 {lot.sellBy}</small></td><td>{lot.qtyOnHand}</td><td>{lot.qtyReserved}</td><td>{lot.qtyQualityHold}</td><td><b>{sellableQty(lot)}</b></td><td><div className="fresh-cell"><span>{percent(fresh)}</span><Progress value={fresh*100} tone={fresh<=.2?'red':fresh<1?'orange':'green'}/></div></td><td>{currency(risk)}</td></tr> }
-
-function Purchasing({ state }: { state: AppState }) { return <><section className="panel"><SectionTitle eyebrow="PROCUREMENT PIPELINE" title="采购中心" action={<button className="primary small"><Truck size={16}/>新建采购草稿</button>} /><div className="table-wrap"><table><thead><tr><th>采购单</th><th>供应商</th><th>商品</th><th>预计到货</th><th>金额</th><th>状态</th><th>来源</th></tr></thead><tbody>{state.purchaseOrders.map(po=><tr key={po.id}><td><b>{po.id}</b><small>{new Date(po.createdAt).toLocaleDateString('zh-CN')}</small></td><td>{supplierName(state,po.supplierId)}</td><td>{po.items.map(x=><span key={x.productId}>{productName(state,x.productId)} × {x.quantity}</span>)}</td><td>{po.expectedAt}</td><td><b>{currency(po.amount)}</b></td><td><Badge tone={statusClass(po.status)}>{({DRAFT:'草稿',PENDING_APPROVAL:'待审批',APPROVED:'已批准',SENT:'已发送',PARTIALLY_RECEIVED:'部分到货',RECEIVED:'已收货'} as Record<string,string>)[po.status]}</Badge></td><td>{po.sourceProposalId?<Badge tone="purple">AI 提案</Badge>:'人工创建'}</td></tr>)}</tbody></table></div></section><section className="panel"><SectionTitle eyebrow="SUPPLIER SCORECARD" title="供应商表现"/><div className="supplier-grid">{state.suppliers.map(s=><article key={s.id}><div><Store size={20}/><b>{s.name}</b></div><p>平均交期 <strong>{s.leadTimeDays} 天</strong></p><p>到货可靠度 <strong>{percent(s.reliability)}</strong></p><Progress value={s.reliability*100}/><small>{s.paymentTerms}</small></article>)}</div></section></> }
 
 function Customers({ state }: { state: AppState }) { return <><section className="panel"><SectionTitle eyebrow="CUSTOMER CREDIT" title="客户与应收" action={<Badge tone="warning">逾期余额 {currency(8600)}</Badge>} /><div className="customer-cards">{state.customers.filter(c=>c.type!=='零售散客').map(c=>{const ars=state.receivables.filter(a=>a.customerId===c.id);const outstanding=ars.reduce((s,a)=>s+a.amount-a.paidAmount,0);return <article key={c.id}><div className="avatar">{c.name.slice(0,1)}</div><div className="customer-main"><div><b>{c.name}</b><Badge tone="neutral">{c.type}</Badge></div><p>信用等级 {c.level} · {c.paymentTermsDays} 天账期</p><div className="credit"><span>信用占用 {currency(outstanding)} / {currency(c.creditLimit)}</span><Progress value={outstanding/c.creditLimit*100} tone={outstanding/c.creditLimit>.5?'orange':'green'}/></div></div><strong className={ars.some(a=>a.status==='OVERDUE')?'red-text':''}>{currency(outstanding)}<small>待收</small></strong></article>})}</div></section><section className="panel"><SectionTitle eyebrow="RECEIVABLES" title="应收明细"/><div className="table-wrap"><table><thead><tr><th>应收单</th><th>客户</th><th>订单</th><th>应收金额</th><th>已收</th><th>到期日</th><th>状态</th></tr></thead><tbody>{state.receivables.map(ar=><tr key={ar.id}><td><b>{ar.id}</b></td><td>{customerName(state,ar.customerId)}</td><td>{ar.orderId}</td><td>{currency(ar.amount)}</td><td>{currency(ar.paidAmount)}</td><td>{ar.dueDate}</td><td><Badge tone={statusClass(ar.status)}>{({OPEN:'待收',PARTIALLY_PAID:'部分收款',PAID:'已结清',OVERDUE:'已逾期',DISPUTED:'争议中'} as Record<string,string>)[ar.status]}</Badge></td></tr>)}</tbody></table></div></section></> }
 
@@ -186,17 +183,19 @@ function EvaluationCenter() {
 
 function App() {
   const [state,setState]=useState<AppState>(()=>loadState())
-  const [page,setPage]=useState<PageKey>('case')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const page = (location.pathname.split('/')[1] || 'dashboard') as PageKey
   const [mobileOpen,setMobileOpen]=useState(false)
   useEffect(()=>saveState(state),[state])
   const pending=useMemo(()=>state.proposals.filter(x=>x.status==='AWAITING_APPROVAL').length,[state.proposals])
-  const changePage=(next:PageKey)=>{setPage(next);setMobileOpen(false);window.scrollTo({top:0,behavior:'smooth'})}
-  const pageTitle=navItems.find(x=>x.key===page)?.label
+  const changePage=(next:PageKey)=>{navigate('/'+next);setMobileOpen(false);window.scrollTo({top:0,behavior:'smooth'})}
+  const pageTitle=navItems.find(x=>x.key===page)?.label ?? '项目说明'
   return <div className="app-shell">
-    <aside className={mobileOpen?'open':''}><div className="brand"><div><Flower2/></div><span><b>花掌柜</b><small>FlowerOps AI</small></span><button className="mobile-close" aria-label="关闭导航" onClick={()=>setMobileOpen(false)}><X/></button></div><div className="store-switch"><span className="avatar mini">花</span><div><b>小型鲜切花批零商家</b><small><i/>合成情景环境</small></div><ChevronRight size={16}/></div><nav>{navItems.map(item=><button key={item.key} className={page===item.key?'active':''} aria-current={page===item.key?'page':undefined} onClick={()=>changePage(item.key)}><item.icon size={19}/><span>{item.label}</span>{item.key==='decisions'&&pending>0&&<em>{pending}</em>}</button>)}</nav><div className="side-note"><ShieldCheck/><div><b>可信 AI 模式</b><p>查询与写入分离，业务动作必须人审。</p></div></div><div className="profile"><span className="avatar mini">林</span><div><b>演示审批人</b><small>店长角色 · MANAGER</small></div><PanelLeftClose size={18}/></div></aside>
-    {mobileOpen&&<div className="backdrop" onClick={()=>setMobileOpen(false)}/>}<main><header><button className="menu-button" aria-label="打开导航" onClick={()=>setMobileOpen(true)}><Menu/></button><div><p>FLOWEROPS / {page.toUpperCase()}</p><h3>{pageTitle}</h3></div><div className="header-actions"><button className="icon-button" title="导出演示数据" onClick={()=>exportState(state)}><Download/></button><button className="ghost reset" onClick={()=>{if(confirm('确认重置全部合成演示数据？'))setState(resetState())}}><RefreshCcw size={16}/>重置 Demo</button><span className="avatar">林</span></div></header><div className="content">
-      {page==='case'&&<CaseStudy go={changePage}/>} {page==='dashboard'&&<Dashboard state={state} go={changePage}/>} {page==='decisions'&&<Decisions state={state} setState={setState}/>} {page==='lab'&&<ModelLab state={state}/>} {page==='evaluation'&&<EvaluationCenter/>} {page==='orders'&&<Orders state={state}/>} {page==='inventory'&&<Inventory state={state}/>} {page==='purchasing'&&<Purchasing state={state}/>} {page==='customers'&&<Customers state={state}/>} {page==='ask'&&<AskBusiness state={state}/>} {page==='audit'&&<Audit state={state}/>}
+    <aside className={mobileOpen?'open':''}><div className="brand"><div><Flower2/></div><span><b>花掌柜</b><small>FlowerOps AI</small></span><button className="mobile-close" aria-label="关闭导航" onClick={()=>setMobileOpen(false)}><X/></button></div><div className="store-switch"><span className="avatar mini">花</span><div><b>小型鲜切花批零商家</b><small><i/>合成情景环境</small></div><ChevronRight size={16}/></div><nav>{navItems.map(item=><Link key={item.key} to={'/'+item.key} className={page===item.key?'active':''} aria-current={page===item.key?'page':undefined} onClick={()=>setMobileOpen(false)}><item.icon size={19}/><span>{item.label}</span>{item.key==='decisions'&&pending>0&&<em>{pending}</em>}</Link>)}</nav><p style={{padding:16}}><Link to="/case">关于项目与面试材料 ↗</Link></p><div className="side-note"><ShieldCheck/><div><b>可信 AI 模式</b><p>查询与写入分离，业务动作必须人审。</p></div></div><div className="profile"><span className="avatar mini">林</span><div><b>演示审批人</b><small>店长角色 · MANAGER</small></div><PanelLeftClose size={18}/></div></aside>
+    {mobileOpen&&<div className="backdrop" onClick={()=>setMobileOpen(false)}/>}<main><header><button className="menu-button" aria-label="打开导航" onClick={()=>setMobileOpen(true)}><Menu/></button><div><p>FLOWEROPS / {page.toUpperCase()}</p><h3>{pageTitle}</h3></div><div className="header-actions"><button className="icon-button" title="导出演示数据" onClick={()=>exportState(state)}><Download/></button><button className="ghost reset" onClick={()=>{if(confirm('确认重置全部合成演示数据？'))setState(resetState())}}><RefreshCcw size={16}/>重置 Demo</button><span className="avatar">林</span></div></header><div className="content"><Routes><Route path="/orders" element={<OrderWorkspace state={state}/>}/><Route path="/orders/:id" element={<OrderWorkspace state={state}/>}/><Route path="/purchasing" element={<PurchaseWorkspace state={state} setState={setState}/>}/><Route path="/purchasing/:id" element={<PurchaseWorkspace state={state} setState={setState}/>}/></Routes>
+      {page==='case'&&<CaseStudy go={changePage}/>} {page==='dashboard'&&<Dashboard state={state} go={changePage}/>} {page==='decisions'&&<Decisions state={state} setState={setState}/>} {page==='lab'&&<ModelLab state={state}/>} {page==='evaluation'&&<EvaluationCenter/>} {page==='inventory'&&<Inventory state={state}/>} {page==='customers'&&<Customers state={state}/>} {page==='ask'&&<AskBusiness state={state}/>} {page==='audit'&&<Audit state={state}/>}
     </div><footer><span>FlowerOps AI · 独立行业研究与受控 AI 决策实验</span><span>没有真实客户、收入或上线收益声明</span></footer></main>
   </div>
 }
-export default App
+export default function RoutedApp() { return <HashRouter><App/></HashRouter> }
